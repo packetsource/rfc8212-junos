@@ -1,0 +1,35 @@
+version 1.0;
+
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+import "../import/junos.xsl";
+
+match configuration {
+
+	if( $junos-context/script-type == "commit" ) {
+
+		/* EBGP peers runnign IP/VPM must apply the export policy! "vpn-apply-export" */
+		for-each (protocols/bgp/group/neighbor[count(family/inet-vpn)>0][!vpn-apply-export && !../vpn-apply-export]) {
+			var $group = ../name;
+			var $neighbor = name;
+			<xnm:error> {
+				<edit-path> "[edit protocols bgp group " _ $group _ " neighbor " _ $neighbor _ "]";
+				<message> "EBGP peers running IP/VPN (1/128) must apply export policy (vpn-apply-export)";
+			}
+		}
+
+		/* EBGP peers must specify both import and export policy */
+		for-each (protocols/bgp/group[type=="external"]/neighbor[count(export)==0 && count(../export)==0] |
+				protocols/bgp/group[type=="external"]/neighbor[count(import)==0 && count(../import)==0]) {
+			var $group = ../name;
+			var $neighbor = name;
+			<xnm:error> {
+				<edit-path> "[edit protocols bgp group " _ $group _ " neighbor " _ $neighbor _ "]";
+				<message> "EBGP peers must specify import and export policy. See RFC 8212.";
+			}
+		}
+
+ 	}
+}

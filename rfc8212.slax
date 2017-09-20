@@ -10,25 +10,74 @@ match configuration {
 
 	if( $junos-context/script-type == "commit" ) {
 
-		/* EBGP peers runnign IP/VPM must apply the export policy! "vpn-apply-export" */
-		for-each (protocols/bgp/group/neighbor[count(family/inet-vpn)>0][!vpn-apply-export && !../vpn-apply-export]) {
-			var $group = ../name;
-			var $neighbor = name;
-			<xnm:error> {
-				<edit-path> "[edit protocols bgp group " _ $group _ " neighbor " _ $neighbor _ "]";
-				<message> "EBGP peers running IP/VPN (1/128) must apply export policy (vpn-apply-export)";
+		/* Name of our special sentinel policy designed to mop up policy-free peers
+		 * If this doesn't exist, we create it with a reject term and then protect
+		 * it to stop miscreants.
+		 *
+		 * Because we use transient-changes to apply the default logic, we also need
+		 * to turn that feature on. 
+		 */
+		var $RFC8212-POLICY-NAME="__RFC8212_DEFAULT__";
+
+		if (count(policy-options/policy-statement[name==$RFC8212-POLICY-NAME])==0) {
+			<xnm:warning> {
+				<message> "creating default EBGP policy for application to non-RFC8212 compliant EBGP peers";
 			}
+
+			var $default-policy = {
+				<policy-options> {
+					<policy-statement protect="protect"> {
+	                    <name> $RFC8212-POLICY-NAME;
+						<then> {
+	                        <reject>;					
+						}				
+					}
+				}
+				<system> {
+					<scripts> {
+						<commit> {
+							<allow-transients>;
+						}
+					}
+				}
+			}
+			call jcs:emit-change($content=$default-policy);
 		}
 
-		/* EBGP peers must specify both import and export policy */
-		for-each (protocols/bgp/group[type=="external"]/neighbor[count(export)==0 && count(../export)==0] |
-				protocols/bgp/group[type=="external"]/neighbor[count(import)==0 && count(../import)==0]) {
+		/* Any EBGP peers without an import or export policy at either group/neighbor level
+		 * are given the default one to start with.
+		 * 
+		 * We push this in as a transient-change, which means it is shoved in EVERY time the
+		 * user commits. This has the advantage that we get to remind our deliquent operator
+		 * of their oversight. 
+		 */
+		for-each (protocols/bgp/group[type=="external"]/neighbor[count(export)==0 && count(../export)==0]) {
 			var $group = ../name;
 			var $neighbor = name;
-			<xnm:error> {
-				<edit-path> "[edit protocols bgp group " _ $group _ " neighbor " _ $neighbor _ "]";
-				<message> "EBGP peers must specify import and export policy. See RFC 8212.";
-			}
+
+			call jcs:emit-change($content={ <export> $RFC8212-POLICY-NAME; },
+						$message="EBGP export policy not found: using " _$RFC8212-POLICY-NAME,
+						$tag="transient-change");
+		}
+		for-each (protocols/bgp/group[type=="external"]/neighbor[count(import)==0 && count(../import)==0]) {
+			var $group = ../name;
+			var $neighbor = name;
+
+			call jcs:emit-change($content={ <import> $RFC8212-POLICY-NAME; },
+						$message="EBGP import policy not found: using " _$RFC8212-POLICY-NAME,
+						$tag="transient-change");
+		}
+
+		/* EBGP peers runnign IP/VPN, we also add vpn-apply-export to make sure that the
+		 * export polices actually do something!
+		 */
+		for-each (protocols/bgp/group[type=="external"]/neighbor[count(family/inet-vpn)>0][!vpn-apply-export && !../vpn-apply-export]) {
+			var $group = ../name;
+			var $neighbor = name;
+
+			call jcs:emit-change($content={ <vpn-apply-export>; },
+						$message="adding vpn-apply-export in order to enable export polices on IP VPN AFIs (1/128)");
+
 		}
 
  	}
