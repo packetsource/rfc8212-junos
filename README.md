@@ -4,11 +4,12 @@ Junos commit script shim to enforce the spirit of [RFC8212](https://tools.ietf.o
 
 Validates Junos post-inheritance candidate configuration to ensure that:
 
-- EBGP peers running IP VPN use "vpn-apply-export": a required knob to 
+- EBGP peers explicitly specify an import and export policy at either
+  group or neighbour level.
+
+- EBGP peers running IP VPN AFI use "vpn-apply-export": a required knob to 
   ensure that the export policy is actually processed for NLRI in the
   VPN address family
-- EBGP peers generally have an export policy defined either at neighbour
-  level or group level.
 
 # Deployment
 
