@@ -31,7 +31,8 @@ peer-as 64500;
 [edit]
 adamc@router# commit 
 [edit protocols bgp group CUSTOMER neighbor 10.0.201.220]
-  EBGP peers must have an export policy. See RFC 8212.
+  EBGP peers must specify import and export policy. See RFC 8212.
+
 error: 1 error reported by commit scripts
 error: commit script failure
 
