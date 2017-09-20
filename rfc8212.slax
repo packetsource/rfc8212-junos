@@ -20,13 +20,14 @@ match configuration {
 			}
 		}
 
-		/* And EBGP peers must actually have an export policy */
-		for-each (protocols/bgp/group[type=="external"]/neighbor[count(export)==0 && count(../export)==0]) {
+		/* EBGP peers must specify both import and export policy */
+		for-each (protocols/bgp/group[type=="external"]/neighbor[count(export)==0 && count(../export)==0] |
+				protocols/bgp/group[type=="external"]/neighbor[count(import)==0 && count(../import)==0]) {
 			var $group = ../name;
 			var $neighbor = name;
 			<xnm:error> {
 				<edit-path> "[edit protocols bgp group " _ $group _ " neighbor " _ $neighbor _ "]";
-				<message> "EBGP peers must have an export policy. See RFC 8212.";
+				<message> "EBGP peers must specify import and export policy. See RFC 8212.";
 			}
 		}
 
